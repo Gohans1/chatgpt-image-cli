@@ -86,6 +86,7 @@ const server = Bun.serve({
       // 2. Parse body
       const body = (await req.json().catch(() => ({}))) as Record<string, any>;
       const prompt = body.prompt;
+      const n = typeof body.n === "number" && body.n > 1 ? body.n : 1;
 
       if (!prompt || typeof prompt !== "string") {
         return Response.json(
@@ -94,13 +95,18 @@ const server = Bun.serve({
         );
       }
 
-      console.log(`\n📥 [Bridge] Nhận request tạo ảnh từ iLab CONJURE!`);
-      console.log(`📝 Prompt: "${prompt}"`);
+      let generationPrompt = prompt;
+      if (n > 1 && !new RegExp(`\\b${n}\\s*(ảnh|images?|pictures?|photos?)\\b`, "i").test(prompt)) {
+        generationPrompt = `${prompt} (Tạo chính xác ${n} bức ảnh / Generate exactly ${n} images)`;
+      }
+
+      console.log(`\n📥 [Bridge] Nhận request tạo ảnh từ iLab CONJURE (Số lượng yêu cầu: ${n})!`);
+      console.log(`📝 Prompt gửi đi: "${generationPrompt}"`);
 
       try {
         // 3. Xếp hàng tạo ảnh tuần tự để tránh xung đột SingletonLock của Chrome
         const headless = process.env.HEADLESS === "true";
-        const results = await enqueueTask(() => generateImage(prompt, { headless }));
+        const results = await enqueueTask(() => generateImage(generationPrompt, { headless }));
 
         console.log(`✅ [Bridge] Đã tạo thành công ${results.length} ảnh. Trả dữ liệu Base64 về cho client...`);
 
