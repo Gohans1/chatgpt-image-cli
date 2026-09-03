@@ -99,7 +99,8 @@ const server = Bun.serve({
 
       try {
         // 3. Xếp hàng tạo ảnh tuần tự để tránh xung đột SingletonLock của Chrome
-        const results = await enqueueTask(() => generateImage(prompt, { headless: true }));
+        const headless = process.env.HEADLESS === "true";
+        const results = await enqueueTask(() => generateImage(prompt, { headless }));
 
         console.log(`✅ [Bridge] Đã tạo thành công ${results.length} ảnh. Trả dữ liệu Base64 về cho client...`);
 

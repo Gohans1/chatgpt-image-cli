@@ -28,5 +28,4 @@ export const SELECTORS = {
   stopButton: '[data-testid="stop-button"]',
   generatedImage: 'img[src*="backend-api/estuary"], img[src*="files.oaiusercontent.com"], img[alt*="Generated image"], img[src*="oaidalleapiprodscus"]',
   loginButton: 'button[data-testid="login-button"], a[href*="/auth/login"]',
-  errorAlert: 'div[role="alert"], [data-testid="content-moderation-alert"]',
 };

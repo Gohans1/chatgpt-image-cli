@@ -76,13 +76,6 @@ export async function generateImage(prompt: string, options: GenerateOptions = {
     const knownSet = new Set(initialUrls);
 
     while (Date.now() - startTime < timeoutMs) {
-      // Kiểm tra xem ChatGPT có từ chối / vi phạm chính sách an toàn không
-      const errorAlert = await page.locator(SELECTORS.errorAlert).first().isVisible().catch(() => false);
-      if (errorAlert) {
-        const errorText = await page.locator(SELECTORS.errorAlert).first().innerText().catch(() => "Vi phạm chính sách nội dung.");
-        throw new Error(`ChatGPT từ chối tạo ảnh: ${errorText}`);
-      }
-
       const currentImages = await page.evaluate((selector) => {
         return Array.from(document.querySelectorAll<HTMLImageElement>(selector))
           .map((img) => img.src || img.getAttribute("src") || "")
