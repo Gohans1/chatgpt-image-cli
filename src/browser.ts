@@ -5,7 +5,6 @@ import { CHROME_EXECUTABLE_PATH, USER_DATA_DIR } from "./config.js";
 export interface BrowserSession {
   context: BrowserContext;
   page: Page;
-  source: "chrome-persistent";
   close: () => Promise<void>;
 }
 
@@ -29,7 +28,6 @@ export async function getBrowserSession(options: BrowserOptions = {}): Promise<B
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
     args: [
       "--disable-blink-features=AutomationControlled",
-      "--no-sandbox",
       "--disable-infobars",
     ],
     ignoreDefaultArgs: ["--enable-automation"],
@@ -47,14 +45,12 @@ export async function getBrowserSession(options: BrowserOptions = {}): Promise<B
   return {
     context,
     page,
-    source: "chrome-persistent",
     close: async () => {
       try {
-        await Promise.race([
-          context.close(),
-          new Promise((r) => setTimeout(r, 2000)),
-        ]);
-      } catch {}
+        await context.close();
+      } catch (err) {
+        console.warn("⚠️ Không thể đóng browser context hoàn tất:", err);
+      }
     },
   };
 }

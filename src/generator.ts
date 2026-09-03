@@ -5,6 +5,7 @@ import { extractAndSaveImages, type DownloadResult } from "./downloader.js";
 export interface GenerateOptions extends BrowserOptions {
   outputPath?: string;
   timeoutMs?: number;
+  skipDiskWrite?: boolean;
 }
 
 export async function generateImage(prompt: string, options: GenerateOptions = {}): Promise<DownloadResult[]> {
@@ -25,6 +26,11 @@ export async function generateImage(prompt: string, options: GenerateOptions = {
       .catch(() => false);
 
     if (isLoginVisible) {
+      if (options.headless) {
+        throw new Error(
+          "Phiên đăng nhập ChatGPT chưa có hoặc đã hết hạn. Vui lòng chạy 'Run-Login.bat' hoặc 'bun run login' trước!"
+        );
+      }
       console.warn("\n⚠️ [CHÚ Ý] Bạn chưa đăng nhập ChatGPT!");
       console.log("👉 Vui lòng đăng nhập tài khoản của bạn trên cửa sổ trình duyệt vừa mở...");
       console.log("⏳ Đang chờ đăng nhập thành công...\n");
@@ -70,6 +76,13 @@ export async function generateImage(prompt: string, options: GenerateOptions = {
     const knownSet = new Set(initialUrls);
 
     while (Date.now() - startTime < timeoutMs) {
+      // Kiểm tra xem ChatGPT có từ chối / vi phạm chính sách an toàn không
+      const errorAlert = await page.locator(SELECTORS.errorAlert).first().isVisible().catch(() => false);
+      if (errorAlert) {
+        const errorText = await page.locator(SELECTORS.errorAlert).first().innerText().catch(() => "Vi phạm chính sách nội dung.");
+        throw new Error(`ChatGPT từ chối tạo ảnh: ${errorText}`);
+      }
+
       const currentImages = await page.evaluate((selector) => {
         return Array.from(document.querySelectorAll<HTMLImageElement>(selector))
           .map((img) => img.src || img.getAttribute("src") || "")
@@ -96,9 +109,12 @@ export async function generateImage(prompt: string, options: GenerateOptions = {
     // Tải và lưu toàn bộ ảnh về đĩa
     const defaultOut = `./output/image_${Date.now()}.png`;
     const targetOut = options.outputPath || defaultOut;
-    console.log(`[5/5] Đã phát hiện ảnh mới! Đang trích xuất và tải về: ${targetOut}...`);
+    console.log(`[5/5] Đã phát hiện ảnh mới! Đang trích xuất ảnh...`);
 
-    const results = await extractAndSaveImages(page, SELECTORS.generatedImage, targetOut, initialUrls);
+    const results = await extractAndSaveImages(page, SELECTORS.generatedImage, targetOut, {
+      knownUrls: initialUrls,
+      skipDiskWrite: options.skipDiskWrite,
+    });
     return results;
   } finally {
     await session.close();

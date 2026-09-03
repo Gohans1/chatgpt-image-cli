@@ -6,14 +6,23 @@ export interface DownloadResult {
   filePath: string;
   sizeBytes: number;
   url: string;
+  base64: string;
+}
+
+export interface ExtractOptions {
+  knownUrls?: string[];
+  skipDiskWrite?: boolean;
 }
 
 export async function extractAndSaveImages(
   page: Page,
   imageSelector: string,
   baseOutputPath: string,
-  knownUrls: string[] = []
+  options: ExtractOptions = {}
 ): Promise<DownloadResult[]> {
+  const knownUrls = options.knownUrls || [];
+  const skipDiskWrite = options.skipDiskWrite ?? false;
+
   const extractedList = await page.evaluate(async ({ selector, existingUrls }) => {
     const images = Array.from(document.querySelectorAll<HTMLImageElement>(selector));
     const validImages = images.filter((img) => {
@@ -22,29 +31,29 @@ export async function extractAndSaveImages(
     });
 
     const knownSet = new Set(existingUrls);
-    // Nhóm theo mã file_id để loại bỏ trùng lặp giữa ảnh to và thumbnail
     const fileMap = new Map<string, string>();
 
     for (const img of validImages) {
       const src = img.src || img.getAttribute("src") || "";
       if (knownSet.has(src)) continue;
 
-      // Trích xuất file id từ URL: ?id=file_...
       const match = src.match(/[?&]id=([^&]+)/);
       const fileKey = match ? match[1] : src;
 
       if (!fileMap.has(fileKey)) {
-        // Đảm bảo URL yêu cầu p=fs (Full Size) nếu là estuary URL
         let fullSizeUrl = src;
-        if (fullSizeUrl.includes("backend-api/estuary") && !fullSizeUrl.includes("p=fs")) {
-          fullSizeUrl = fullSizeUrl.replace(/[?&]p=[^&]+/, "") + "&p=fs";
-        }
+        try {
+          const u = new URL(src);
+          if (u.pathname.includes("backend-api/estuary")) {
+            u.searchParams.set("p", "fs");
+            fullSizeUrl = u.toString();
+          }
+        } catch {}
         fileMap.set(fileKey, fullSizeUrl);
       }
     }
 
     if (fileMap.size === 0) {
-      // Fallback: nếu không thấy ảnh mới theo knownSet, lấy ảnh cuối cùng
       if (validImages.length > 0) {
         const lastSrc = validImages[validImages.length - 1].src;
         fileMap.set("last", lastSrc);
@@ -93,7 +102,9 @@ export async function extractAndSaveImages(
   }
 
   const parentDir = dirname(baseOutputPath);
-  mkdirSync(parentDir, { recursive: true });
+  if (!skipDiskWrite) {
+    mkdirSync(parentDir, { recursive: true });
+  }
 
   const parsed = parse(baseOutputPath);
   const downloadedResults: DownloadResult[] = [];
@@ -106,16 +117,19 @@ export async function extractAndSaveImages(
     }
 
     const buffer = Buffer.from(item.base64, "base64");
-    // Nếu chỉ có 1 ảnh: lưu tên file nguyên bản. Nếu nhiều ảnh: thêm hậu tố _1, _2, _3...
     const filePath = extractedList.length === 1
       ? baseOutputPath
       : join(parentDir, `${parsed.name}_${i + 1}${parsed.ext || ".png"}`);
 
-    writeFileSync(filePath, buffer);
+    if (!skipDiskWrite) {
+      writeFileSync(filePath, buffer);
+    }
+
     downloadedResults.push({
       filePath,
       sizeBytes: buffer.length,
       url: item.url,
+      base64: item.base64,
     });
   }
 
